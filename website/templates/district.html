@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style2.css') }}">
+    <style>
+        .overlay {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .overlay-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
+
+        .results {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px; 
+            position: relative;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 50px;
+            right: 200px;
+            color: red;
+            cursor: pointer;
+            font-size: 24px;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .equations {
+            margin-top: 20px;
+            font-weight: bold;
+        }
+
+        .exit-button {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            cursor: pointer;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: #4CAF50;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            color: #fff;
+            text-decoration: none;
+            z-index: 9999;
+        }
+        
+        #plotImage {
+            width: 100%;
+            height: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        #plotImg {
+            max-width: 100%;
+            max-height: 100%;
+        }
+        
+    </style>
+</head>
+<body>
+    <a href="/map" class="exit-button">&larr;</a>
+    <div class="container">
+        <h1><span id="districtTitle">{{ district_name }}</span></h1>
+        <h2>Insira a Demanda Anual</h2>
+        <form id="calculateForm" action="/map/district/{{ district_name }}/calculate" method="POST">
+            <label for="demand">Demanda Anual(Kwh/ano):</label>
+            <br>
+            <input type="number" id="demand" name="demand">
+            <br>
+
+            <input type="submit" value="Submit">
+            <input type="hidden" id="districtNameHidden" name="district_name" value="{{ district_name }}">
+            <input type="hidden" id="AHidden" name="A" value="{{ A }}">
+            <input type="hidden" id="BHidden" name="B" value="{{ B }}">
+            <input type="hidden" id="CHidden" name="C" value="{{ C }}">
+        </form>
+    </div>
+
+    <div class="overlay" id="resultsOverlay">
+        <div class="overlay-content">
+            <div id="plotImage"></div>
+            <div class="results" id="resultsContent"></div>
+            <div class="close-btn" onclick="closeOverlay()">X</div>
+        </div>
+    </div>
+
+    <script>
+        function openOverlay() {
+            document.getElementById('resultsOverlay').style.display = 'block';
+        }
+
+        function closeOverlay() {
+            var plotImageElement = document.getElementById('plotImage');
+            plotImageElement.innerHTML = ''; // Clear the plot image
+            document.getElementById('resultsOverlay').style.display = 'none';
+        }
+
+        document.getElementById('calculateForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            var form = e.target;
+            var xhr = new XMLHttpRequest();
+            xhr.open(form.method, form.action, true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
+                    var response = JSON.parse(xhr.responseText);
+                    var results = response.results_dict;
+                    displayResults(results, form, response.plot_image);
+                }
+            };
+            xhr.send(new URLSearchParams(new FormData(form)));
+        });
+
+        function displayResults(results, form, plot_image) {
+            var resultsContent = document.getElementById('resultsContent');
+            resultsContent.innerHTML = ''; 
+            for (var key in results) {
+                var resultElement = document.createElement('p');
+                if (key === 'demand') {
+                    resultElement.innerHTML = 'Demand: ' + form.elements['demand'].value;
+                } else {
+                    resultElement.innerHTML ='<strong>'+ key+ ':<strong> ' + results[key] +' Kwh/ano';
+                }
+                resultsContent.appendChild(resultElement);
+            }
+
+            var plotImageElement = document.getElementById('plotImage');
+            plotImageElement.innerHTML = ''; 
+
+            var plotImgElement = document.createElement('img');
+            plotImgElement.id = 'plotImg';
+            plotImgElement.src = "{{ url_for('static', filename='images/plot.png') }}";
+            plotImgElement.alt = 'Plot Image';
+            plotImageElement.appendChild(plotImgElement);
+            
+            
+            
+            var timestamp = new Date().getTime();
+            plotImgElement.src = "{{ url_for('static', filename='images/plot.png') }}?timestamp=" + timestamp;
+            
+            plotImgElement.alt = 'Plot Image';
+            plotImageElement.appendChild(plotImgElement);
+            
+            var A = form.elements['A'].value;
+            var B = form.elements['B'].value;
+            var C = form.elements['C'].value;
+
+            var equationsElement = document.createElement('div');
+            equationsElement.classList.add('equations');
+            equationsElement.innerHTML = 'Modelo Matemático:<br>' +
+                'min z = '+ A + 'x<sub>1</sub> + '+B+'x<sub>2</sub> +'+C+'x<sub>3</sub><br>' +
+                'Restrições:  <br>' +
+                'x<sub>1</sub> + x<sub>2</sub> + x<sub>3</sub> &#8805; '+ form.elements['demand'].value +'<br>'+
+                '41x<sub>1</sub> + 11x<sub>2</sub> + 24x<sub>3</sub> &#8804; 20 &#8901; ' + form.elements['demand'].value + '<br>'+
+                ' x<sub>1</sub> &#8804; 0.744x<sub>2</sub> <br>'+
+                ' x<sub>3</sub> &#8804; 0.309x<sub>2</sub> <br>'+
+                ' x<sub>3</sub> &#8804; 0.399x<sub>1</sub> <br>'+
+                ' x<sub>1</sub>,x<sub>2</sub>,x<sub>3</sub> &#8805 0 <br>';
+
+            resultsContent.appendChild(equationsElement);
+
+            openOverlay();
+        }
+    </script>
+</body>
+</html>
