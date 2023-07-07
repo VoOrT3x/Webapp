@@ -90,9 +90,9 @@ def calculate(district_name):
     
     model += (x_1 + x_2 + x_3 >= demand)
     model += (41*x_1+11*x_2+24*x_3 <= 20*demand)  
-    model += ( 0.309*x_2 >= x_3)
-    model += (0.399*x_1 >= x_3) 
-    model += (0.744*x_2 >= x_1)
+    model += (x_1<= A*demand)
+    model += (x_2<= B*demand)
+    model += (x_3<= C*demand)
     
     
     results_dict = {}
